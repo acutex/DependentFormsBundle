@@ -2,6 +2,8 @@
 
 namespace Anacona16\Bundle\DependentFormsBundle\Controller;
 
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PropertyAccess\PropertyAccess;
@@ -10,6 +12,15 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 class DependentFormsController extends AbstractController
 {
+
+    private EntityManagerInterface $em;
+
+    public function __construct(EntityManagerInterface $entityManager)
+    {
+        $this->em = $entityManager;
+    }
+
+
     /**
      * This action handler the ajax call for a dependent field type.
      *
@@ -23,6 +34,7 @@ class DependentFormsController extends AbstractController
         $entityAlias = $request->request->get('entity_alias');
         $parentId = $request->request->get('parent_id');
         $emptyValue = $request->request->get('empty_value');
+//        $doctrine = $doctrine
 
         $entities = $this->getParameter('anacona16.dependent_forms_config');
         $entityInformation = $entities[$entityAlias];
@@ -32,25 +44,25 @@ class DependentFormsController extends AbstractController
         }
         if( '' !== $parentId){
 
-        $qb = $this->getDoctrine()
-            ->getRepository($entityInformation['class'])
-            ->createQueryBuilder('e')
-            ->where('e.'.$entityInformation['parent_property'].' = :parent_id')
-            ->orderBy('e.'.$entityInformation['order_property'], $entityInformation['order_direction'])
-            ->setParameter('parent_id', $parentId)
-        ;
+            $qb = $this->em
+                ->getRepository($entityInformation['class'])
+                ->createQueryBuilder('e')
+                ->where('e.'.$entityInformation['parent_property'].' = :parent_id')
+                ->orderBy('e.'.$entityInformation['order_property'], $entityInformation['order_direction'])
+                ->setParameter('parent_id', $parentId)
+            ;
 
-        if (null !== $entityInformation['callback']) {
-            $repository = $qb->getEntityManager()->getRepository($entityInformation['class']);
+            if (null !== $entityInformation['callback']) {
+                $repository = $qb->getEntityManager()->getRepository($entityInformation['class']);
 
-            if (!method_exists($repository, $entityInformation['callback'])) {
-                throw new \InvalidArgumentException(sprintf('Callback function "%s" in Repository "%s" does not exist.', $entityInformation['callback'], get_class($repository)));
+                if (!method_exists($repository, $entityInformation['callback'])) {
+                    throw new \InvalidArgumentException(sprintf('Callback function "%s" in Repository "%s" does not exist.', $entityInformation['callback'], get_class($repository)));
+                }
+
+                $repository->$entityInformation['callback']($qb);
             }
 
-            $repository->$entityInformation['callback']($qb);
-        }
-
-        $results = $qb->getQuery()->getResult();
+            $results = $qb->getQuery()->getResult();
         }
 
         if (empty($results)) {
